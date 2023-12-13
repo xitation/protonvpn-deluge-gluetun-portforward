@@ -1,0 +1,93 @@
+---
+version: "2.1"
+services:
+  gluetun:
+    # https://github.com/qdm12/gluetun
+    image: ghcr.io/qdm12/gluetun:latest
+    container_name: gluetun
+    hostname: gluetun
+    # line above must be uncommented to allow external containers to connect. See https://github.com/qdm12/gluetun/wiki/Connect-a-container-to-gluetun#external-container-to-gluetun
+    restart: unless-stopped
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    volumes:
+      - ./gluetun:/gluetun
+      - ./gluetun/tmp:/tmp/gluetun/
+      # If using ProtonVPN with OpenVPN, this path needs to be set to the downloaded .ovpn file
+      # - /<yourpath>/<ovpn_config>.udp.ovpn:/gluetun/custom.conf:ro
+    environment:
+      # See https://github.com/qdm12/gluetun/wiki
+      ## ProtonVPN Wireguard
+      - VPN_SERVICE_PROVIDER=custom
+      - VPN_TYPE=wireguard
+      - VPN_ENDPOINT_IP=<Endpoint ip bit - from proton config file>
+      - VPN_ENDPOINT_PORT=<Endpoint port bit - from proton config file>
+      - WIREGUARD_PUBLIC_KEY=<PublicKey - from proton config file>
+      - WIREGUARD_PRIVATE_KEY=<PrivateKey - from proton config file>
+      - WIREGUARD_ADDRESSES=<Address - from proton config file>
+      - VPN_PORT_FORWARDING=on
+      - VPN_PORT_FORWARDING_PROVIDER=protonvpn
+      ## ProtonVPN OpenVPN
+      # - VPN_SERVICE_PROVIDER=custom
+      # - VPN_TYPE=openvpn
+      # - OPENVPN_CUSTOM_CONFIG=/gluetun/custom.conf
+      # See https://protonvpn.com/support/port-forwarding-manual-setup/
+      # - OPENVPN_USER=<username>+pmp
+      # - OPENVPN_PASSWORD=
+      # Timezone for accurate log times
+      - TZ=Etc/UTC
+      # Server list updater. See https://github.com/qdm12/gluetun/wiki/Updating-Servers#periodic-update
+      - UPDATER_PERIOD=
+      - UPDATER_VPN_SERVICE_PROVIDERS=
+      # If QBITTORRENT_SERVER address is not related to VPN_IF_NAME (default: tun0) you'll need to set the variable below
+      # - FIREWALL_OUTBOUND_SUBNETS=172.16.0.0/24
+    ports:
+      # - 8888:8888/tcp # HTTP proxy
+      # - 8388:8388/tcp # Shadowsocks
+      # - 8388:8388/udp # Shadowsocks
+      - 8112:8112/tcp # Deluge ports, noting we use network_mode: "service:gluetun" on the deluge container so the connection to it comes in via this container
+    networks:
+      pir8-lan:
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true" #I use watchtower, you should too :)
+
+  deluge:
+    image: lscr.io/linuxserver/deluge:amd64-latest
+    container_name: deluge
+    hostname: deluge
+    environment:
+      - PUID=1001 #change to your service account uid
+      - PGID=1001 #change to your service account gid
+      - TZ=Etc/UTC
+      - DELUGE_LOGLEVEL=error #optional
+      - DELUGE_PASSWORD=deluge #this is required for the curl scripts to connect to the Deluge API to update the Forwarded Port, it's not used for Deluge config at all though, only my script.
+    volumes:
+      - ./deluge_config:/config 
+      - ./downloads:/downloads # Set this to where you want your torrents to go
+      - ./scripts:/custom-cont-init.d:ro #You can customaise linuxserver.io containers, who knew? :) - https://docs.linuxserver.io/general/container-customization/
+    volumes_from: #this allows us to access the /tmp/gluetun/forwarded_port file that the gluetun container creates for us, my script uses this to work out the port we need to change via the Deluge API.
+      - gluetun
+    restart: unless-stopped
+    healthcheck:
+      test: curl --fail http://localhost:8112 || exit 1
+      interval: 10s
+      retries: 5
+      start_period: 5s
+      timeout: 10s
+    network_mode: "service:gluetun" #Have our Deluge container use the Gluetun network stack
+    depends_on:
+      gluetun:
+        condition: service_healthy
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true" #I use watchtower, you should too :)
+
+networks:
+  pir8-lan:
+    name: containers #You will need a container network that allows the container to access the internet, preferably nothing else on your lan.
+    external: true #Ideally this network is defined outside of this project and maybe used by other containers
+    enable_ipv6: false #ipv6 breaks the gluetun container at the moment, so make sure it's not enabled
+    driver: bridge
+    driver_opts:
+      com.docker.network.enable_ipv6: "false" #why configure it once, when you can do it twice?

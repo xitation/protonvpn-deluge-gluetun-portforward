@@ -29,7 +29,7 @@ Do the following to ensure you have setup a Wireguard VPN config with NAT-PMP en
 
 You should get something similar to this:
 
-```
+```ini
 [Interface]
 # Key for Xi-Pir8-Demo
 # Bouncing = 0
@@ -47,6 +47,7 @@ PublicKey = 4v/dB/ha+PGL0jihNVlVj81NGAFh6VndO9s4giDZEUw=
 AllowedIPs = 0.0.0.0/0
 Endpoint = 185.230.126.18:51820
 ```
+
 These values will go into the docker-compose file documented below.
 
 # Docker Compose
@@ -67,99 +68,99 @@ Things of Note:
 **IMORTANT NOTE:**
 The <WIREGUARD_ADDRESSES> should be /28 subnet not /32 as defined by the ProtonVPN config file
 
-    ---
-    version: "2.1"
-    services:
-      gluetun:
-        # https://github.com/qdm12/gluetun
-        image: ghcr.io/qdm12/gluetun:latest
-        container_name: gluetun
-        hostname: gluetun
-        # line above must be uncommented to allow external containers to connect. See https://github.com/qdm12/gluetun/wiki/Connect-a-container-to-gluetun#external-container-to-gluetun
-        restart: unless-stopped
-        cap_add:
-          - NET_ADMIN
-        devices:
-          - /dev/net/tun:/dev/net/tun
-        volumes:
-          - ./gluetun:/gluetun
-          - ./gluetun/tmp:/tmp/gluetun/
-          # If using ProtonVPN with OpenVPN, this path needs to be set to the downloaded .ovpn file
-          # - /<yourpath>/<ovpn_config>.udp.ovpn:/gluetun/custom.conf:ro
-        environment:
-          # See https://github.com/qdm12/gluetun/wiki
-          ## ProtonVPN Wireguard
-          - VPN_SERVICE_PROVIDER=custom
-          - VPN_TYPE=wireguard
-          - VPN_ENDPOINT_IP=<Endpoint ip bit - from proton config file>
-          - VPN_ENDPOINT_PORT=<Endpoint port bit - from proton config file>
-          - WIREGUARD_PUBLIC_KEY=<PublicKey - from proton config file>
-          - WIREGUARD_PRIVATE_KEY=<PrivateKey - from proton config file>
-          - WIREGUARD_ADDRESSES=<Address - from proton config file>
-          - VPN_PORT_FORWARDING=on
-          - VPN_PORT_FORWARDING_PROVIDER=protonvpn
-          ## ProtonVPN OpenVPN
-          # - VPN_SERVICE_PROVIDER=custom
-          # - VPN_TYPE=openvpn
-          # - OPENVPN_CUSTOM_CONFIG=/gluetun/custom.conf
-          # See https://protonvpn.com/support/port-forwarding-manual-setup/
-          # - OPENVPN_USER=<username>+pmp
-          # - OPENVPN_PASSWORD=
-          # Timezone for accurate log times
-          - TZ=Etc/UTC
-          # Server list updater. See https://github.com/qdm12/gluetun/wiki/Updating-Servers#periodic-update
-          - UPDATER_PERIOD=
-          - UPDATER_VPN_SERVICE_PROVIDERS=
-          # If QBITTORRENT_SERVER address is not related to VPN_IF_NAME (default: tun0) you'll need to set the variable below
-          # - FIREWALL_OUTBOUND_SUBNETS=192.168.0.1/24
-        ports:
-          # - 8888:8888/tcp # HTTP proxy
-          # - 8388:8388/tcp # Shadowsocks
-          # - 8388:8388/udp # Shadowsocks
-          - 8112:8112/tcp # Deluge ports, noting we use network_mode: "service:gluetun" on the deluge container
-        networks:
-          pir8-lan:
-        labels:
-          - "com.centurylinklabs.watchtower.enable=true" #I use watchtower
-      deluge:
-        image: lscr.io/linuxserver/deluge:amd64-latest
-        container_name: deluge
-        hostname: deluge
-        environment:
-          - PUID=1001 #change to your service account uid
-          - PGID=1001 #change to your service account gid
-          - TZ=Etc/UTC
-          - DELUGE_LOGLEVEL=error #optional
-          - DELUGE_PASSWORD=deluge #this is required for the curl scripts to connect to the Deluge API to update the Forwarded Port, it's not used for Deluge config at all though, only my script.
-        volumes:
-          - ./deluge_config:/config
-          - ./downloads:/downloads
-          - ./scripts:/custom-cont-init.d:ro #You can customaise linuxserver.io containers, who knew? :) - https://docs.linuxserver.io/general/container-customization/
-        volumes_from: #this allows us to access the /tmp/gluetun/forwarded_port file that the gluetun container creates for us, my script uses this to work out the port we need to change via the Deluge API.
-          - gluetun
-        restart: unless-stopped
-        healthcheck:
-          test: curl --fail http://localhost:8112 || exit 1
-          interval: 10s
-          retries: 5
-          start_period: 5s
-          timeout: 10s
-        network_mode: "service:gluetun"
-        depends_on:
-          gluetun:
-            condition: service_healthy
-        labels:
-          - "com.centurylinklabs.watchtower.enable=true"
-    
+```yaml
+version: "2.1"
+services:
+  gluetun:
+    # https://github.com/qdm12/gluetun
+    image: ghcr.io/qdm12/gluetun:latest
+    container_name: gluetun
+    hostname: gluetun
+    # line above must be uncommented to allow external containers to connect. See https://github.com/qdm12/gluetun/wiki/Connect-a-container-to-gluetun#external-container-to-gluetun
+    restart: unless-stopped
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    volumes:
+      - ./gluetun:/gluetun
+      - ./gluetun/tmp:/tmp/gluetun/
+      # If using ProtonVPN with OpenVPN, this path needs to be set to the downloaded .ovpn file
+      # - /<yourpath>/<ovpn_config>.udp.ovpn:/gluetun/custom.conf:ro
+    environment:
+      # See https://github.com/qdm12/gluetun/wiki
+      ## ProtonVPN Wireguard
+      - VPN_SERVICE_PROVIDER=custom
+      - VPN_TYPE=wireguard
+      - VPN_ENDPOINT_IP=<Endpoint ip bit - from proton config file>
+      - VPN_ENDPOINT_PORT=<Endpoint port bit - from proton config file>
+      - WIREGUARD_PUBLIC_KEY=<PublicKey - from proton config file>
+      - WIREGUARD_PRIVATE_KEY=<PrivateKey - from proton config file>
+      - WIREGUARD_ADDRESSES=<Address - from proton config file>
+      - VPN_PORT_FORWARDING=on
+      - VPN_PORT_FORWARDING_PROVIDER=protonvpn
+      ## ProtonVPN OpenVPN
+      # - VPN_SERVICE_PROVIDER=custom
+      # - VPN_TYPE=openvpn
+      # - OPENVPN_CUSTOM_CONFIG=/gluetun/custom.conf
+      # See https://protonvpn.com/support/port-forwarding-manual-setup/
+      # - OPENVPN_USER=<username>+pmp
+      # - OPENVPN_PASSWORD=
+      # Timezone for accurate log times
+      - TZ=Etc/UTC
+      # Server list updater. See https://github.com/qdm12/gluetun/wiki/Updating-Servers#periodic-update
+      - UPDATER_PERIOD=
+      - UPDATER_VPN_SERVICE_PROVIDERS=
+      # If QBITTORRENT_SERVER address is not related to VPN_IF_NAME (default: tun0) you'll need to set the variable below
+      # - FIREWALL_OUTBOUND_SUBNETS=192.168.0.1/24
+    ports:
+      # - 8888:8888/tcp # HTTP proxy
+      # - 8388:8388/tcp # Shadowsocks
+      # - 8388:8388/udp # Shadowsocks
+      - 8112:8112/tcp # Deluge ports, noting we use network_mode: "service:gluetun" on the deluge container
     networks:
       pir8-lan:
-        name: containers
-        external: true
-        enable_ipv6: false #ipv6 breaks the gluetun container at the moment, so make sure it's not enabled
-        driver: bridge
-        driver_opts:
-          com.docker.network.enable_ipv6: "false" #why configure it once, when you can do it twice?
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true" #I use watchtower
+  deluge:
+    image: lscr.io/linuxserver/deluge:amd64-latest
+    container_name: deluge
+    hostname: deluge
+    environment:
+      - PUID=1001 #change to your service account uid
+      - PGID=1001 #change to your service account gid
+      - TZ=Etc/UTC
+      - DELUGE_LOGLEVEL=error #optional
+      - DELUGE_PASSWORD=deluge #this is required for the curl scripts to connect to the Deluge API to update the Forwarded Port, it's not used for Deluge config at all though, only my script.
+    volumes:
+      - ./deluge_config:/config
+      - ./downloads:/downloads
+      - ./scripts:/custom-cont-init.d:ro #You can customaise linuxserver.io containers, who knew? :) - https://docs.linuxserver.io/general/container-customization/
+    volumes_from: #this allows us to access the /tmp/gluetun/forwarded_port file that the gluetun container creates for us, my script uses this to work out the port we need to change via the Deluge API.
+      - gluetun
+    restart: unless-stopped
+    healthcheck:
+      test: curl --fail http://localhost:8112 || exit 1
+      interval: 10s
+      retries: 5
+      start_period: 5s
+      timeout: 10s
+    network_mode: "service:gluetun"
+    depends_on:
+      gluetun:
+        condition: service_healthy
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"
 
+networks:
+  pir8-lan:
+    name: containers
+    external: true
+    enable_ipv6: false #ipv6 breaks the gluetun container at the moment, so make sure it's not enabled
+    driver: bridge
+    driver_opts:
+      com.docker.network.enable_ipv6: "false" #why configure it once, when you can do it twice?
+```
 
 # The Scripts
 
@@ -190,43 +191,45 @@ This script does the following in this exact order:
 
 **Code:**
 
-    #!/bin/bash
-    
-    # We require this file to exist, which means the gluetun container must have started before this one, so we wait until it's mounted into the deulue container
-    until ls /tmp/gluetun/forwarded_port
-    do
-      echo "waiting for /tmp/gluetun/forwarded_port to be avaialble"
-      sleep 2
-    done
-    
-    # Setup some ENV things we use later, noting that FW Port file is mounted out of the gluetun container and if that doesn't happen this will fail to work
-    CRONTAB_FILE=/etc/crontabs/root
-    
-    # Check if curl is installed, if not install it...
-    if [ ! -f /usr/bin/curl ]; then
-      echo "**** installing curl ****"
-      apk add --no-cache curl
-    fi
-    
-    # Check if our cron dir exists if not create it...
-    if [ ! -d /etc/periodic/1min ]; then
-      echo "**** creating /etc/periodic/1min directory ****"
-      mkdir /etc/periodic/1min
-    fi
-    
-    # Check if our script is copied over, if not copy it over...
-    if [ ! -f /etc/periodic/1min/configure_port.sh ]; then
-      echo "**** copying $SCRIPT into /etc/periodic/1min directory ****"
-      cp -af /custom-cont-init.d/configure_port.sh /etc/periodic/1min/
-      chmod +x /custom-cont-init.d/configure_port.sh
-    fi
-    
-    # check if we have the crontab entry in place, if not add it
-    isInFile=$(cat $CRONTAB_FILE | grep -c "1min")
-    if [ $isInFile -eq 0 ]; then
-      echo "**** Setting up crontab entry to run setup.sh script ****"
-      echo "*       *       *       *       *       run-parts /etc/periodic/1min" >> $CRONTAB_FILE
-    fi
+```bash
+#!/bin/bash
+
+# We require this file to exist, which means the gluetun container must have started before this one, so we wait until it's mounted into the deulue container
+until ls /tmp/gluetun/forwarded_port
+do
+  echo "waiting for /tmp/gluetun/forwarded_port to be avaialble"
+  sleep 2
+done
+
+# Setup some ENV things we use later, noting that FW Port file is mounted out of the gluetun container and if that doesn't happen this will fail to work
+CRONTAB_FILE=/etc/crontabs/root
+
+# Check if curl is installed, if not install it...
+if [ ! -f /usr/bin/curl ]; then
+  echo "**** installing curl ****"
+  apk add --no-cache curl
+fi
+
+# Check if our cron dir exists if not create it...
+if [ ! -d /etc/periodic/1min ]; then
+  echo "**** creating /etc/periodic/1min directory ****"
+  mkdir /etc/periodic/1min
+fi
+
+# Check if our script is copied over, if not copy it over...
+if [ ! -f /etc/periodic/1min/configure_port.sh ]; then
+  echo "**** copying $SCRIPT into /etc/periodic/1min directory ****"
+  cp -af /custom-cont-init.d/configure_port.sh /etc/periodic/1min/
+  chmod +x /custom-cont-init.d/configure_port.sh
+fi
+
+# check if we have the crontab entry in place, if not add it
+isInFile=$(cat $CRONTAB_FILE | grep -c "1min")
+if [ $isInFile -eq 0 ]; then
+  echo "**** Setting up crontab entry to run setup.sh script ****"
+  echo "*       *       *       *       *       run-parts /etc/periodic/1min" >> $CRONTAB_FILE
+fi
+```
 
 ## The script that connect to the Deluge API and figures out the port forwarded port, and updates Deluge with this port - *./scripts/configure_port.sh*
 
@@ -245,26 +248,28 @@ The script does the following in exactly this order:
 
 **Code:**
 
-    #!/bin/bash
-    
-    # We require this file to exist, which means the gluetun container must have started before this one, so we wait until it's mounted into the deulue container
-    until ls /tmp/gluetun/forwarded_port
-    do
-      echo "waiting for /tmp/gluetun/forwarded_port to be avaialble"
-      sleep 2
-    done
-    
-    # Setup some ENV things we use later, noting that FW Port file is mounted out of the gluetun container and if that doesn't happen this will fail to work
-    FORWARDED_PORT=`cat /tmp/gluetun/forwarded_port`
-    
-    # Check if curl is installed, if not install it.
-    if [ ! -f /usr/bin/curl ]; then
-      echo "**** installing curl ****"
-      apk add --no-cache curl
-    fi
-    
-    # taken from here - https://forum.deluge-torrent.org/viewtopic.php?t=56190 appears to work fine so didn't fuck with it too much
-    cookie=$(curl -v -H "Content-Type: application/json" -d '{"method": "auth.login", "params": ["'$DELUGE_PASSWORD'"], "id": 1}' http://localhost:8112/json 2>&1 | grep Cookie | cut -d':' -f2)
-    #curl -H "cookie: $cookie" -H "Content-Type: application/json" -d '{"method": "web.connect", "params": ["<HOSTID>"], "id": 1}' http://localhost:8112/json
-    curl -H "cookie: $cookie" -H "Content-Type: application/json" -d '{"method": "core.set_config", "params": [{"listen_ports": ['$FORWARDED_PORT','$FORWARDED_PORT']}], "id": 1}' http://localhost:8112/json
-    curl -H "cookie: $cookie" -H "Content-Type: application/json" -d '{"method": "core.set_config", "params": [{"random_port": false}], "id": 1}' http://localhost:8112/json
+```bash
+#!/bin/bash
+
+# We require this file to exist, which means the gluetun container must have started before this one, so we wait until it's mounted into the deulue container
+until ls /tmp/gluetun/forwarded_port
+do
+  echo "waiting for /tmp/gluetun/forwarded_port to be avaialble"
+  sleep 2
+done
+
+# Setup some ENV things we use later, noting that FW Port file is mounted out of the gluetun container and if that doesn't happen this will fail to work
+FORWARDED_PORT=`cat /tmp/gluetun/forwarded_port`
+
+# Check if curl is installed, if not install it.
+if [ ! -f /usr/bin/curl ]; then
+  echo "**** installing curl ****"
+  apk add --no-cache curl
+fi
+
+# taken from here - https://forum.deluge-torrent.org/viewtopic.php?t=56190 appears to work fine so didn't fuck with it too much
+cookie=$(curl -v -H "Content-Type: application/json" -d '{"method": "auth.login", "params": ["'$DELUGE_PASSWORD'"], "id": 1}' http://localhost:8112/json 2>&1 | grep Cookie | cut -d':' -f2)
+#curl -H "cookie: $cookie" -H "Content-Type: application/json" -d '{"method": "web.connect", "params": ["<HOSTID>"], "id": 1}' http://localhost:8112/json
+curl -H "cookie: $cookie" -H "Content-Type: application/json" -d '{"method": "core.set_config", "params": [{"listen_ports": ['$FORWARDED_PORT','$FORWARDED_PORT']}], "id": 1}' http://localhost:8112/json
+curl -H "cookie: $cookie" -H "Content-Type: application/json" -d '{"method": "core.set_config", "params": [{"random_port": false}], "id": 1}' http://localhost:8112/json
+```
